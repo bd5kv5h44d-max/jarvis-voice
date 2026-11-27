@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>J.A.R.V.I.S. Voice</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #050b14;
+      color: #d9f4ff;
+      font-family: Arial, sans-serif;
+    }
+
+    .panel {
+      width: min(90%, 420px);
+      padding: 32px 24px;
+      text-align: center;
+      border: 1px solid #17618a;
+      border-radius: 18px;
+      background: #091725;
+      box-shadow: 0 0 30px #0876a533;
+    }
+
+    h1 {
+      color: #50caff;
+      letter-spacing: 4px;
+    }
+
+    #status {
+      min-height: 48px;
+      color: #9dc8dc;
+      margin: 24px 0;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      margin: 8px 0;
+      border: 1px solid #28a9e8;
+      border-radius: 9px;
+      background: #0c3854;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    #result {
+      margin-top: 20px;
+      color: #fff;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="panel">
+    <h1>J.A.R.V.I.S.</h1>
+    <p>VOICE INTERFACE</p>
+
+    <div id="status">SPRACHSYSTEM BEREIT</div>
+
+    <button id="startButton">
+      🎙️ SPRACHEINGABE STARTEN
+    </button>
+
+    <button id="stopButton" disabled>
+      STOPP
+    </button>
+
+    <div id="result"></div>
+  </main>
+
+  <script>
+    const Recognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    const statusText =
+      document.getElementById("status");
+
+    const resultText =
+      document.getElementById("result");
+
+    const startButton =
+      document.getElementById("startButton");
+
+    const stopButton =
+      document.getElementById("stopButton");
+
+    let recognition = null;
+    let sent = false;
+
+    if (!Recognition) {
+      statusText.textContent =
+        "SPRACHERKENNUNG NICHT UNTERSTÜTZT";
+
+      startButton.disabled = true;
+    }
+
+    startButton.addEventListener("click", function() {
+
+      if (!Recognition) return;
+
+      sent = false;
+      resultText.textContent = "";
+
+      recognition = new Recognition();
+
+      recognition.lang = "de-DE";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = function() {
+        statusText.textContent = "ICH HÖRE ZU ...";
+        startButton.disabled = true;
+        stopButton.disabled = false;
+      };
+
+      recognition.onresult = function(event) {
+
+        const spoken =
+          event.results[0][0].transcript;
+
+        resultText.textContent = spoken;
+
+        if (!sent) {
+          sent = true;
+
+          if (window.opener) {
+            window.opener.postMessage(
+              {
+                type: "JARVIS_VOICE_RESULT",
+                text: spoken
+              },
+              "*"
+            );
+
+            statusText.textContent =
+              "TEXT AN J.A.R.V.I.S. GESENDET";
+          } else {
+            statusText.textContent =
+              "KEINE J.A.R.V.I.S.-VERBINDUNG";
+          }
+        }
+      };
+
+      recognition.onerror = function(event) {
+        statusText.textContent =
+          "SPRACHFEHLER: " + event.error;
+      };
+
+      recognition.onend = function() {
+        startButton.disabled = false;
+        stopButton.disabled = true;
+
+        if (!sent) {
+          statusText.textContent =
+            "SPRACHERKENNUNG BEENDET";
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        statusText.textContent =
+          "STARTFEHLER: " + error.message;
+
+        startButton.disabled = false;
+        stopButton.disabled = true;
+      }
+
+    });
+
+    stopButton.addEventListener("click", function() {
+      if (recognition) {
+        recognition.stop();
+      }
+    });
+  </script>
+</body>
+</html>
