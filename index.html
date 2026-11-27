@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050b14">
   <title>J.A.R.V.I.S. Voice</title>
 
   <style>
@@ -86,99 +87,202 @@
     <div id="result"></div>
   </main>
 
-<script>
-  const Recognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+  <script>
+    "use strict";
 
-  const statusText = document.getElementById("status");
-  const resultText = document.getElementById("result");
-  const startButton = document.getElementById("startButton");
-  const stopButton = document.getElementById("stopButton");
+    const GITHUB_ORIGIN =
+      "https://bd5kv5h44d-max.github.io";
 
-  let recognition = null;
-  let sent = false;
+    const Recognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
 
-  function startRecognition() {
-    if (!Recognition || recognition) return;
+    const statusText =
+      document.getElementById("status");
 
-    sent = false;
-    resultText.textContent = "";
-    recognition = new Recognition();
+    const resultText =
+      document.getElementById("result");
 
-    recognition.lang = "de-DE";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    const startButton =
+      document.getElementById("startButton");
 
-    recognition.onstart = function() {
-      statusText.textContent = "ICH HÖRE ZU ...";
-      startButton.disabled = true;
-      stopButton.disabled = false;
-    };
+    const stopButton =
+      document.getElementById("stopButton");
 
-    recognition.onresult = function(event) {
-      const spoken = event.results[0][0].transcript;
-      resultText.textContent = spoken;
+    let recognition = null;
+    let sent = false;
+    let manuallyStopped = false;
 
-      if (!sent) {
+    function updateStatus(message) {
+      statusText.textContent = message;
+    }
+
+    function startRecognition() {
+      if (!Recognition) {
+        updateStatus(
+          "SPRACHERKENNUNG NICHT UNTERSTÜTZT"
+        );
+        return;
+      }
+
+      if (recognition) {
+        return;
+      }
+
+      sent = false;
+      manuallyStopped = false;
+      resultText.textContent = "";
+
+      const currentRecognition = new Recognition();
+      recognition = currentRecognition;
+
+      currentRecognition.lang = "de-DE";
+      currentRecognition.continuous = false;
+      currentRecognition.interimResults = false;
+      currentRecognition.maxAlternatives = 1;
+
+      currentRecognition.onstart = function() {
+        updateStatus("ICH HÖRE ZU ...");
+        startButton.disabled = true;
+        stopButton.disabled = false;
+      };
+
+      currentRecognition.onresult = function(event) {
+        if (sent) return;
+
+        const spoken =
+          event.results[0][0].transcript.trim();
+
+        if (!spoken) return;
+
         sent = true;
+        resultText.textContent = spoken;
 
-        window.parent.postMessage({
-          type: "JARVIS_VOICE_RESULT",
-          text: spoken
-        }, "*");
+        if (window.parent === window) {
+          updateStatus(
+            "VOICE BEREIT – KEINE J.A.R.V.I.S.-EINBETTUNG"
+          );
+          return;
+        }
 
-        statusText.textContent = "TEXT AN J.A.R.V.I.S. GESENDET";
+        window.parent.postMessage(
+          {
+            type: "JARVIS_VOICE_RESULT",
+            text: spoken
+          },
+          "*"
+        );
+
+        updateStatus(
+          "TEXT AN J.A.R.V.I.S. ÜBERGEBEN"
+        );
+      };
+
+      currentRecognition.onerror = function(event) {
+        updateStatus(
+          "SPRACHFEHLER: " + event.error
+        );
+
+        console.error(
+          "J.A.R.V.I.S. Voice Fehler:",
+          event.error
+        );
+      };
+
+      currentRecognition.onend = function() {
+        if (recognition === currentRecognition) {
+          recognition = null;
+        }
+
+        startButton.disabled = false;
+        stopButton.disabled = true;
+
+        if (!sent && !manuallyStopped) {
+          updateStatus(
+            "SPRACHERKENNUNG BEENDET"
+          );
+        }
+      };
+
+      try {
+        currentRecognition.start();
+      } catch (error) {
+        recognition = null;
+
+        startButton.disabled = false;
+        stopButton.disabled = true;
+
+        updateStatus(
+          "STARTFEHLER: " + error.message
+        );
+
+        console.error(error);
       }
-    };
+    }
 
-    recognition.onerror = function(event) {
-      statusText.textContent = "SPRACHFEHLER: " + event.error;
-    };
+    function stopRecognition() {
+      if (!recognition) return;
 
-    recognition.onend = function() {
-      recognition = null;
-      startButton.disabled = false;
-      stopButton.disabled = true;
+      manuallyStopped = true;
+      recognition.stop();
 
-      if (!sent) {
-        statusText.textContent = "SPRACHERKENNUNG BEENDET";
+      updateStatus("SPRACHERKENNUNG GESTOPPT");
+    }
+
+    startButton.addEventListener(
+      "click",
+      startRecognition
+    );
+
+    stopButton.addEventListener(
+      "click",
+      stopRecognition
+    );
+
+    window.addEventListener(
+      "message",
+      function(event) {
+
+        if (event.source !== window.parent) {
+          return;
+        }
+
+        if (
+          event.origin !==
+          "https://script.google.com"
+        ) {
+          return;
+        }
+
+        if (!event.data || typeof event.data !== "object") {
+          return;
+        }
+
+        if (
+          event.data.type ===
+          "JARVIS_START_LISTENING"
+        ) {
+          startRecognition();
+        }
+
+        if (
+          event.data.type ===
+          "JARVIS_STOP_LISTENING"
+        ) {
+          stopRecognition();
+        }
       }
-    };
+    );
 
-    try {
-      recognition.start();
-    } catch (error) {
-      recognition = null;
-      statusText.textContent = "STARTFEHLER: " + error.message;
-      startButton.disabled = false;
-      stopButton.disabled = true;
+    if (!Recognition) {
+      updateStatus(
+        "SPRACHERKENNUNG NICHT UNTERSTÜTZT"
+      );
+
+      startButton.disabled = true;
+    } else {
+      updateStatus("SPRACHSYSTEM BEREIT");
     }
-  }
-
-  function stopRecognition() {
-    if (recognition) recognition.stop();
-  }
-
-  startButton.addEventListener("click", startRecognition);
-  stopButton.addEventListener("click", stopRecognition);
-
-  window.addEventListener("message", function(event) {
-    if (event.source !== window.parent) return;
-
-    if (event.data?.type === "JARVIS_START_LISTENING") {
-      startRecognition();
-    }
-
-    if (event.data?.type === "JARVIS_STOP_LISTENING") {
-      stopRecognition();
-    }
-  });
-
-  if (!Recognition) {
-    statusText.textContent = "SPRACHERKENNUNG NICHT UNTERSTÜTZT";
-    startButton.disabled = true;
-  }
-</script>  
+  </script>
 </body>
 </html>
