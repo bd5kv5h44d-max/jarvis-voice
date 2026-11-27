@@ -148,22 +148,23 @@
       };
 
       currentRecognition.onresult = function(event) {
-        if (sent) return;
+        const spoken = event.results[0][0].transcript;
 
-        const spoken =
-          event.results[0][0].transcript.trim();
+if (!window.opener || window.opener.closed) {
+  updateStatus("KEINE J.A.R.V.I.S.-VERBINDUNG");
+  return;
+}
 
-        if (!spoken) return;
+window.opener.postMessage(
+  {
+    type: "JARVIS_VOICE_RESULT",
+    text: spoken
+  },
+  "*"
+);
 
-        sent = true;
-        resultText.textContent = spoken;
-
-        if (window.parent === window) {
-          updateStatus(
-            "VOICE BEREIT – KEINE J.A.R.V.I.S.-EINBETTUNG"
-          );
-          return;
-        }
+updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
+    
 
         window.parent.postMessage(
           {
