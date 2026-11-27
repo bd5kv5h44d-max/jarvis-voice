@@ -129,6 +129,13 @@
         return;
       }
 
+      if (!window.opener || window.opener.closed) {
+        updateStatus(
+          "KEINE J.A.R.V.I.S.-VERBINDUNG"
+        );
+        return;
+      }
+
       sent = false;
       manuallyStopped = false;
       resultText.textContent = "";
@@ -148,45 +155,80 @@
       };
 
       currentRecognition.onresult = function(event) {
-        const spoken = event.results[0][0].transcript;
+        if (sent) return;
 
-if (!window.opener || window.opener.closed) {
-  updateStatus("KEINE J.A.R.V.I.S.-VERBINDUNG");
-  return;
-}
+        if (
+          !event.results ||
+          !event.results.length ||
+          !event.results[0].length
+        ) {
+          updateStatus("KEIN SPRACHTEXT ERKANNT");
+          return;
+        }
 
-window.opener.postMessage(
-  {
-    type: "JARVIS_VOICE_RESULT",
-    text: spoken
-  },
-  "*"
-);
+        const spoken =
+          String(event.results[0][0].transcript || "").trim();
 
-updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
-    
+        if (!spoken) {
+          updateStatus("KEIN SPRACHTEXT ERKANNT");
+          return;
+        }
 
-        window.parent.postMessage(
-          {
-            type: "JARVIS_VOICE_RESULT",
-            text: spoken
-          },
-          "*"
-        );
+        resultText.textContent = spoken;
 
-        updateStatus(
-          "TEXT AN J.A.R.V.I.S. ÜBERGEBEN"
-        );
+        if (!window.opener || window.opener.closed) {
+          updateStatus(
+            "J.A.R.V.I.S.-FENSTER NICHT VERFÜGBAR"
+          );
+          return;
+        }
+
+        try {
+          window.opener.postMessage(
+            {
+              type: "JARVIS_VOICE_RESULT",
+              text: spoken
+            },
+            "*"
+          );
+
+          sent = true;
+
+          updateStatus(
+            "TEXT AN J.A.R.V.I.S. ÜBERGEBEN"
+          );
+
+        } catch (error) {
+          console.error(
+            "ÜBERTRAGUNGSFEHLER:",
+            error
+          );
+
+          updateStatus(
+            "ÜBERTRAGUNG FEHLGESCHLAGEN"
+          );
+
+          alert(
+            "Der erkannte Text konnte nicht an J.A.R.V.I.S. übertragen werden."
+          );
+        }
       };
 
       currentRecognition.onerror = function(event) {
-        updateStatus(
-          "SPRACHFEHLER: " + event.error
-        );
+        const errorMessage =
+          event.error || "unbekannt";
 
         console.error(
           "J.A.R.V.I.S. Voice Fehler:",
-          event.error
+          errorMessage
+        );
+
+        updateStatus(
+          "SPRACHFEHLER: " + errorMessage
+        );
+
+        alert(
+          "Spracherkennungsfehler: " + errorMessage
         );
       };
 
@@ -198,7 +240,15 @@ updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
         startButton.disabled = false;
         stopButton.disabled = true;
 
-        if (!sent && !manuallyStopped) {
+        if (sent) {
+          updateStatus(
+            "TEXT AN J.A.R.V.I.S. ÜBERGEBEN"
+          );
+        } else if (manuallyStopped) {
+          updateStatus(
+            "SPRACHERKENNUNG GESTOPPT"
+          );
+        } else {
           updateStatus(
             "SPRACHERKENNUNG BEENDET"
           );
@@ -207,6 +257,11 @@ updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
 
       try {
         currentRecognition.start();
+
+        updateStatus(
+          "SPRACHERKENNUNG WIRD GESTARTET ..."
+        );
+
       } catch (error) {
         recognition = null;
 
@@ -217,7 +272,15 @@ updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
           "STARTFEHLER: " + error.message
         );
 
-        console.error(error);
+        console.error(
+          "STARTFEHLER:",
+          error
+        );
+
+        alert(
+          "Die Spracherkennung konnte nicht gestartet werden: " +
+          error.message
+        );
       }
     }
 
@@ -225,9 +288,18 @@ updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
       if (!recognition) return;
 
       manuallyStopped = true;
-      recognition.stop();
 
-      updateStatus("SPRACHERKENNUNG GESTOPPT");
+      try {
+        recognition.stop();
+        updateStatus(
+          "SPRACHERKENNUNG WIRD GESTOPPT ..."
+        );
+      } catch (error) {
+        console.error(
+          "STOPPFEHLER:",
+          error
+        );
+      }
     }
 
     startButton.addEventListener(
@@ -240,41 +312,6 @@ updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
       stopRecognition
     );
 
-    window.addEventListener(
-      "message",
-      function(event) {
-
-        if (event.source !== window.parent) {
-          return;
-        }
-
-        if (
-          event.origin !==
-          "https://script.google.com"
-        ) {
-          return;
-        }
-
-        if (!event.data || typeof event.data !== "object") {
-          return;
-        }
-
-        if (
-          event.data.type ===
-          "JARVIS_START_LISTENING"
-        ) {
-          startRecognition();
-        }
-
-        if (
-          event.data.type ===
-          "JARVIS_STOP_LISTENING"
-        ) {
-          stopRecognition();
-        }
-      }
-    );
-
     if (!Recognition) {
       updateStatus(
         "SPRACHERKENNUNG NICHT UNTERSTÜTZT"
@@ -282,7 +319,9 @@ updateStatus("TEXT AN J.A.R.V.I.S. ÜBERGEBEN");
 
       startButton.disabled = true;
     } else {
-      updateStatus("SPRACHSYSTEM BEREIT");
+      updateStatus(
+        "SPRACHSYSTEM BEREIT"
+      );
     }
   </script>
 </body>
